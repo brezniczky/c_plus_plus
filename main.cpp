@@ -22,6 +22,12 @@
 
   - use priority_queue standard template via inheritance as mentioned at
     http://stackoverflow.com/questions/19467485/c-priority-queue-removing-element-not-at-top
+    hm... looks like this approach will rebuild the heap on removal, making that
+    an o(n) operation
+
+    here is another approach, which is indeed fast
+    http://stackoverflow.com/questions/3076163/stl-priority-queue-deleting-an-item
+    but may pollute memory (fits well though in my case)
 */
 
 #include <iostream>
@@ -50,7 +56,7 @@ private:
 
 public:
   /* Creates and a matrix of the given size.
-     The values are allocated but undefined. */
+  The values are allocated but undefined. */
   Matrix(int rows_, int cols_) {
     this->rows_ = rows_;
     this->cols_ = cols_;
@@ -99,7 +105,7 @@ private:
   void RandomInit(double density, double min_dist, double max_dist, int seed) {
 
     default_random_engine generator(seed);
-    uniform_real_distribution<double> dist_distribution(min_dist, max_dist);
+    uniform_real_distribution<double> edge_distribution(min_dist, max_dist);
     uniform_real_distribution<double> is_connected_dist(0.0, 1.0);
 
     for(int i = 0; i < adjacency_->GetRows(); ++i) {
@@ -107,7 +113,7 @@ private:
         // the adjacency matrix of an undirected graph is symmetric, set the
         // values equally for both directions
         if (is_connected_dist(generator) < density) {
-          double dist = dist_distribution(generator);
+          double dist = edge_distribution(generator);
           adjacency_->Set(i, j, dist);
           adjacency_->Set(j, i, dist);
         } else {
@@ -128,7 +134,7 @@ public:
     RandomInit(density, min_dist, max_dist, seed);
   }
 
-  /* Destrutor - frees up allocated memory. */
+  /* Destructor - frees up allocated memory. */
   ~Graph() {
     delete adjacency_;
   }

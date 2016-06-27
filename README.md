@@ -22,5 +22,5 @@ The method:
 * a mean shortest path is calculated for each graph, and printed
 * a mean of the above means is calculated and printed
 
-This is repeated with graphs of 0.2 and 0.4 density (density: probability of two
-nodes being connected).
+This is performed with graphs of 0.2 density, then of 0.4 (density: probability 
+of two nodes being connected).
