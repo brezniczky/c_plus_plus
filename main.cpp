@@ -44,7 +44,7 @@ const double kInf = numeric_limits<double>::infinity();
 
 /* Class representing a matrix of floating point values. */
 class Matrix {
-private:
+ private:
   double* values_;
   int rows_;
   int cols_;
@@ -54,7 +54,7 @@ private:
     return(row * cols_ + col);
   }
 
-public:
+ public:
   /* Creates and a matrix of the given size.
   The values are allocated but undefined. */
   Matrix(int rows_, int cols_) {
@@ -96,7 +96,7 @@ public:
    the number of nodes in the graph.
 */
 class Graph {
-private:
+ private:
   /* Adjacency (aka. connectivity) matrix of the graph. Weights represent
      distances. "inf" weights are to be used between the non-adjacent nodes. */
   Matrix* adjacency_;
@@ -124,7 +124,7 @@ private:
     }
   }
 
-public:
+ public:
   /* Creates the graph with random density and distances as described by the
      given parameters. */
   Graph(int nodes = 50, double density = 0.1,
@@ -178,9 +178,9 @@ public:
    no replacement. A more efficient (but also involving) version can be
    created then. Suffices for the current input set. */
 template<class Key, class Priority> class SimplePriorityQueue {
-private:
+ private:
   map<Key, Priority> priority_by_key_;
-public:
+ public:
   /* Adds an item with the given priority. */
   void Push(const Key& key, const Priority& priority) {
     priority_by_key_.emplace(key, priority);
@@ -242,9 +242,9 @@ public:
 /* Class implementing Dijsktra's shortest path algorithm, with focusing only on
    the average path lengths from a given node. */
 class ShortestPathFinder {
-private:
+ private:
   Graph* graph_;
-public:
+ public:
   /* Creates the instance, preparing for operations on the given graph. */
   ShortestPathFinder(Graph& g) {
     graph_ = &g;
