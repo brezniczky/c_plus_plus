@@ -1,193 +1,175 @@
+/*
+  Implementation of Dijsktra's algorithm for shortest path in a graph, with a
+  focus on estimating average path length between nodes.
+
+  Main classes:
+
+  Matrix
+  Graph
+  ShortestPathFinder
+
+  The classes have the "<<" operator defined for verification purposes.
+
+  Future improvements:
+  - define (x, y) operator on the matrix class
+
+  - the matrix could be triangular, since it is symmetric - memory consumption
+    could be reduced
+
+  - create generic mean or sum calculation solution
+
+  - handling of exceptions/unsuccessful execution
+
+  - use priority_queue standard template via inheritance as mentioned at
+    http://stackoverflow.com/questions/19467485/c-priority-queue-removing-element-not-at-top
+    hm... looks like this approach will rebuild the heap on removal, making that
+    an o(n) operation
+
+    here is another approach, which is indeed fast
+    http://stackoverflow.com/questions/3076163/stl-priority-queue-deleting-an-item
+    but may pollute memory (fits well though in my case)
+
+    yet another: use multiset (can't remember where it was suggested)
+    http://en.cppreference.com/w/cpp/container/multiset
+    "a sorted set of objects of type Key"
+    "Search, insertion, and removal operations have logarithmic complexity."
+
+*/
+
 #include <iostream>
 #include <vector>
 #include <random>
-// #include <queue>
 #include <map>
 
-/*
-ideas:
-- define >> operator again, on the matrix class
-  useful for manual verification
-
-- define (x, y) operator on the matrix class
-
-- the matrix could be triangular, since it is symmetric
-
-- use size_t where int is an indexer
-
-- new TODO:
-  priority queue: always proceed with the closest node from "u"
-
-- priority queue:
-  Compare argument
-
-mention:
-- node indexes are zero-based
-*/
-
-/*
-
-potential partial interface definition for a Graph could be:
-
-Class Graph:
-
-V (G): returns the number of vertices in the graph
-E (G): returns the number of edges in the graph
-adjacent (G, x, y): tests whether there is an edge from node x to node y.
-neighbors (G, x): lists all nodes y such that there is an edge from x to y.
-add (G, x, y): adds to G the edge from x to y, if it is not there.
-delete (G, x, y): removes the edge from x to y, if it is there.
-get_node_value (G, x): returns the value associated with the node x.
-set_node_value( G, x, a): sets the value associated with the node x to a.
-get_edge_value( G, x, y): returns the value associated to the edge (x,y).
-set_edge_value (G, x, y, v): sets the value associated to the edge (x,y) to v.
-
-Class PriorityQueue
-
-chgPrioirity(PQ, priority): changes the priority (node value) of queue element.
-minPrioirty(PQ): removes the top element of the queue.
-contains(PQ, queue_element): does the queue contain queue_element.
-Insert(PQ, queue_element): insert queue_element into queue
-top(PQ):returns the top element of the queue.
-size(PQ): return the number of queue_elements.
-
-Class ShortestPath
-
-vertices(List): list of vertices in G(V,E).
-path(u, w): find shortest path between u-w and returns the sequence of vertices representing shorest path u-v1-v2-…-vn-w.
-path_size(u, w): return the path cost associated with the shortest path.
-
-*/
 
 using namespace std;
 
-const double INF = numeric_limits<double>::infinity();
 
-typedef int node_id_t;
+/* Infinite value constant. */
+const double kInf = numeric_limits<double>::infinity();
 
+
+/* Class representing a matrix of floating point values. */
 class Matrix {
-private:
-  double* values;
-  int rows;
-  int cols;
+ private:
+  double* values_;
+  int rows_;
+  int cols_;
 
-  inline int get_index(int row, int col) {
-    return(row * cols + col);
+  /* Quickly retrieves the index of the memory slot for a given cell. */
+  inline int GetIndex(int row, int col) {
+    return(row * cols_ + col);
   }
 
-public:
-  Matrix(int rows, int cols) {
-    this->rows = rows;
-    this->cols = cols;
-    values = new double[rows * cols];
-    // TODO: initialize to false?
+ public:
+  /* Creates and a matrix of the given size.
+  The values are allocated but undefined. */
+  Matrix(int rows_, int cols_) {
+    this->rows_ = rows_;
+    this->cols_ = cols_;
+    values_ = new double[rows_ * cols_];
   }
 
   ~Matrix() {
-    delete values;
+    delete(values_);
   }
 
-  double inline get(int row, int col) {
-    return(values[get_index(row, col)]);
+  /* Gets the value of a given cell. */
+  double inline Get(int row, int col) {
+    return(values_[GetIndex(row, col)]);
   }
 
-  // TODO: define the = operator instead of set()
-  void inline set(int row, int col, const double value) {
-    values[get_index(row, col)] = value;
+  /* Sets the value of a given cell. */
+  void inline Set(int row, int col, const double value) {
+    values_[GetIndex(row, col)] = value;
   }
 
-  inline int get_rows() {
-    return(rows);
+  /* Tells how many rows the matrix has. */
+  inline int GetRows() {
+    return(rows_);
   }
 
-  inline int get_cols() {
-    return(cols);
+  /* Tells how many columns the matrix has. */
+  inline int GetCols() {
+    return(cols_);
   }
 };
 
-ostream& operator<<(ostream& out, Matrix& mat) {
-  for(int i = 0; i < mat.get_rows(); ++i) {
-    for(int j = 0; j < mat.get_cols(); ++j) {
-      out << mat.get(i, j);
-      if (j < (mat.get_cols() - 1)) {
-        out << ", ";
-      }
-      else {
-        out << endl;
-      }
-    }
-  }
 
-  return(out);
-}
+/* A simple graph class allowing directed and undirected weighted graphs to be
+   specified, and for random graph generation.
 
-
+   Nodes are represented by integer values ranging from 0..(n - 1), where n is
+   the number of nodes in the graph.
+*/
 class Graph {
-private:
-  // adjacency (aka. connectivity) matrix of the graph
-  //
-  Matrix* adjacency;
+ private:
+  /* Adjacency (aka. connectivity) matrix of the graph. Weights represent
+     distances. "inf" weights are to be used between the non-adjacent nodes. */
+  Matrix* adjacency_;
 
-  void random_init(double density, double mindist, double maxdist, int seed) {
+  /* Initializes a symmetric adjacency matrix with random weights. */
+  void RandomInit(double density, double min_dist, double max_dist, int seed) {
 
     default_random_engine generator(seed);
-    uniform_real_distribution<double> dist_distribution(mindist, maxdist);
+    uniform_real_distribution<double> edge_distribution(min_dist, max_dist);
     uniform_real_distribution<double> is_connected_dist(0.0, 1.0);
 
-    for(int i = 0; i < adjacency->get_rows(); ++i) {
-      for(int j = i + 1; j < adjacency->get_cols(); ++j) {
+    for(int i = 0; i < adjacency_->GetRows(); ++i) {
+      for(int j = i + 1; j < adjacency_->GetCols(); ++j) {
+        // the adjacency matrix of an undirected graph is symmetric, set the
+        // values equally for both directions
         if (is_connected_dist(generator) < density) {
-          double dist = dist_distribution(generator);
-
-          // the adjacency matrix of an undirected graph is symmetric
-          adjacency->set(i, j, dist);
-          adjacency->set(j, i, dist);
+          double dist = edge_distribution(generator);
+          adjacency_->Set(i, j, dist);
+          adjacency_->Set(j, i, dist);
         } else {
-          adjacency->set(i, j, INF);
-          adjacency->set(j, i, INF);
+          adjacency_->Set(i, j, kInf);
+          adjacency_->Set(j, i, kInf);
         }
       }
     }
   }
 
-  void init_adjacency(int nodes) {
-    adjacency = new Matrix(nodes, nodes);
-  }
-public:
-  /*  The random graph procedure should have edge density
-  as a parameter and distance range as a parameter. */
-  // TODO: What is the distribution supposed to be?
-  //       I'll go with uniform first.
+ public:
+  /* Creates the graph with random density and distances as described by the
+     given parameters. */
   Graph(int nodes = 50, double density = 0.1,
-        double mindist = 1.0, double maxdist = 10.0, int seed = 0) {
-    // TODO: do I have perform this init here or is the parameterless autocalled?
-    init_adjacency(nodes);
-    random_init(density, mindist, maxdist, seed);
+        double min_dist = 1.0, double max_dist = 10.0, int seed = 0) {
+
+    adjacency_ = new Matrix(nodes, nodes);;
+    RandomInit(density, min_dist, max_dist, seed);
   }
 
+  /* Destructor - frees up allocated memory. */
   ~Graph() {
-    delete adjacency;
+    delete adjacency_;
   }
 
-  int get_node_count() {
-    return(adjacency->get_rows());
+  /* Tells the number of nodes in the graph. */
+  int GetNodeCount() {
+    return(adjacency_->GetRows());
   }
 
-  Matrix& get_adjacency_matrix() {
-    return(*adjacency);
+  /* Returns a reference to the adjacency matrix allowing external
+     modifications. */
+  Matrix& GetAdjacencyMatrix() {
+    return(*adjacency_);
   }
 
-  double get_edge_length(int node1, int node2) {
-    return(adjacency->get(node1, node2));
+  /* Returns the length of a given edge. */
+  double GetEdgeLength(int node1, int node2) {
+    return(adjacency_->Get(node1, node2));
   }
 
-  vector<pair<int, double>> get_edges(int node) {
+  /* Returns all the edges originating from a given node. */
+  vector<pair<int, double>> GetEdgesFrom(int node) {
 
     vector<pair<int, double>> neighbours = vector<pair<int, double>>();
 
-    for(int i = 0; i < adjacency->get_cols(); i++) {
-      double dist = adjacency->get(node, i);
-      if (dist < INF) {
+    for(int i = 0; i < adjacency_->GetCols(); i++) {
+      double dist = adjacency_->Get(node, i);
+      if (dist < kInf) {
         neighbours.push_back(pair<int, double>(i, dist));
       }
     }
@@ -196,71 +178,38 @@ public:
   }
 };
 
-//class Path:vector<int> {
-//public:
-//  double get_length(Graph g) {
-//    double sum = 0.0;
-//    for(int i = (this->size() - 1); i > 1; --i) {
-//      sum += g.get_edge_length((*this)[i], ((*this)[i - 1]));
-//    }
-//
-//    return(sum);
-//  };
-//};
 
+/* A map-based simple priority queue implementation.
 
+   Scales poorly for larger input, but is a useful placeholder while it needs
+   no replacement. A more efficient (but also involving) version can be
+   created then. Suffices for the current input set. */
 template<class Key, class Priority> class SimplePriorityQueue {
-  /* first implementation: an array-based version for verifying the rest of the
-     algorithm and to reach a prototype implementation
-
-     slow and bad, but it is only to give correct results while the real
-     solution is developed
-  */
-private:
-  map<Key, Priority> priority_by_key;
-public:
-  Key get_max_item() {
-    if (priority_by_key.empty()) {
-      return(NULL);
-    };
-
-    typename map<Key, Priority>::iterator it = priority_by_key.begin();
-    typename map<Key, Priority>::iterator max_item;
-
-    for(; it != priority_by_key.end(); ++it)
-      if (it->second > max_item->second)
-        max_item = it;
-
-    return(max_item->first);
+ private:
+  map<Key, Priority> priority_by_key_;
+ public:
+  /* Adds an item with the given priority. */
+  void Push(const Key& key, const Priority& priority) {
+    priority_by_key_.emplace(key, priority);
   }
 
-  void push(const Key &key, const Priority &priority) {
-    priority_by_key.emplace(key, priority);
+  /* Removes the item with the given key. */
+  bool Erase(const Key key) {
+    return(priority_by_key_.erase(key) > 0);
   }
 
-  void dump() {
-    typename map<Key, Priority>::iterator it = priority_by_key.begin();
-
-    while(it != priority_by_key.end()) {
-      cout << it->first << ":" << it -> second << endl;
-      ++it;
-    }
-  }
-
-  bool erase(const Key key) {
-    return(priority_by_key.erase(key) > 0);
-  }
-
-  bool pop_min(Key &key, Priority &priority) {
-    if (priority_by_key.empty())
+  /* Removes and retrieves the highest priority item
+     (i.e. lowest priority value). */
+  bool PopMin(Key& key, Priority& priority) {
+    if (priority_by_key_.empty())
       return(false);
 
-    typename map<Key, Priority>::iterator it = priority_by_key.begin();
+    typename map<Key, Priority>::iterator it = priority_by_key_.begin();
 
     key = it->first;
     priority = it->second;
 
-    while(it != priority_by_key.end()) {
+    while(it != priority_by_key_.end()) {
       if (it->second < priority) {
         key = it->first;
         priority = it->second;
@@ -268,70 +217,83 @@ public:
       ++it;
     }
 
-//    dump();
-    if (!erase(key)) {
-      cout << "could not delete key " << key << endl;
-//      dump();
-      erase(key);
-    }
+    Erase(key);
 
     return(true);
   }
 
-  void change_priority(const Key& key, const Priority& priority) {
-    erase(key);
-    push(key, priority);
+  /* Changes the priority associated with the item as specified. */
+  void ChangePriority(const Key& key, const Priority& new_priority) {
+    Erase(key);
+    Push(key, new_priority);
   }
 
-  bool empty() {
-    return(priority_by_key.empty());
+  /* Tells if the queue is empty. */
+  bool Empty() {
+    return(priority_by_key_.empty());
+  }
+
+  /* Allows priority queues to be printed to output streams in a human readable
+     way. */
+  ostream& operator<<(ostream& out) {
+    typename map<Key, Priority>::iterator it = priority_by_key_.begin();
+
+    while(it != priority_by_key_.end()) {
+      cout << it->first << ":" << it -> second << endl;
+      ++it;
+    }
   }
 };
 
+
+/* Class implementing Dijsktra's shortest path algorithm, with focusing only on
+   the average path lengths from a given node. */
 class ShortestPathFinder {
-private:
-  Graph* graph;
-public:
-  ShortestPathFinder(Graph &g) {
-    graph = &g;
+ private:
+  Graph* graph_;
+ public:
+  /* Creates the instance, preparing for operations on the given graph. */
+  ShortestPathFinder(Graph& g) {
+    graph_ = &g;
   }
 
-  vector<double> get_shortest_dists(int from_node) {
-    int node_count = graph->get_node_count();
+  /* Returns all the lengths of shortest paths between a given node and all
+     the nodes, including itself.
+
+     A simplified version of the full Dijsktra's algorithm, based on the
+     pseudo-code at https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm */
+  vector<double> GetShortestPathLengths(int from_node) {
+    int node_count = graph_->GetNodeCount();
     vector<double> dist = vector<double>();
-//    double prev[node_count];
 
     SimplePriorityQueue<int, double> q = SimplePriorityQueue<int, double>();
 
     for(int i = 0; i < node_count; ++i) {
       if (i != from_node)
-        dist.push_back(INF);
+        dist.push_back(kInf);
       else
         dist.push_back(0);
-//      prev[i] = -1;
-      q.push(i, dist[i]);
+      q.Push(i, dist[i]);
     }
 
     dist[from_node] = 0;
 
-    while (!q.empty()) {
+    while (!q.Empty()) {
       int act_node;
       double act_dist;
-      q.pop_min(act_node, act_dist);
-
-//      cout << "checking next node:" << act_node << endl;
-//      cout << "current dist:" << act_dist << endl;
+      q.PopMin(act_node, act_dist);
 
       // iterate over all neighbours of the node
-      vector<pair<int, double>> edges = graph->get_edges(act_node);
+      vector<pair<int, double>> edges = graph_->GetEdgesFrom(act_node);
 
       for(int j = 0; static_cast<size_t>(j) < edges.size(); ++j) {
         double alt_dist = act_dist + edges.at(j).second;
         int v = edges.at(j).first;
         if (alt_dist < dist[v]) {
           dist[v] = alt_dist;
-          q.change_priority(v, alt_dist);
-//            prev[v] = u;
+          q.ChangePriority(v, alt_dist);
+
+          // keep going: this allows to check the paths to all other nodes
         }
       }
     }
@@ -339,13 +301,19 @@ public:
     return(dist);
   }
 
-  double get_mean_shortest_path_length(int from_node = 0) {
-    vector<double> dists = get_shortest_dists(from_node);
+  /* Returns the average length of shortest paths originating from the given
+     node to each of the other nodes, omitting the ones that cannot be reached.
+
+     Remark:
+     -1 is returned if the node is disconnected from other nodes.
+  */
+  double GetMeanShortestPathLength(int from_node = 0) {
+    vector<double> dists = GetShortestPathLengths(from_node);
 
     double sum = 0;
     double count = 0;
-    for(int i = 1; i < graph->get_node_count(); ++i) {
-      if (dists[i] < INF) {
+    for(int i = 1; i < graph_->GetNodeCount(); ++i) {
+      if (dists[i] < kInf) {
         sum += dists[i];
         count += 1;
       }
@@ -360,73 +328,60 @@ public:
   }
 };
 
-ostream& operator <<(ostream &out, Graph &grr) {
-  out << grr.get_adjacency_matrix();
+
+/* Allows the matrix instances to be printed to output streams in a human
+   readable way. */
+ostream& operator<<(ostream& out, Matrix& mat) {
+  for(int i = 0; i < mat.GetRows(); ++i) {
+    for(int j = 0; j < mat.GetCols(); ++j) {
+      out << mat.Get(i, j);
+      if (j < (mat.GetCols() - 1)) {
+        out << ", ";
+      }
+      else {
+        out << endl;
+      }
+    }
+  }
 
   return(out);
 }
 
-void test() {
-  // 1->2: 2 units
-  // 1->3: 4 units
-  Graph g = Graph(4, 0);
 
-  cout << g.get_adjacency_matrix() << "---" << endl;
+/* Allows graphs to be printed to output streams in a human readable way. */
+ostream& operator <<(ostream& out, Graph& g) {
+  out << g.GetAdjacencyMatrix();
 
-  // 1->3, 3->2, 2->4 transitions cost 1, 2, 3 each
-  //
-  // thus,
-  // path to #2: 1
-  // path to #3: 1 + 2
-  // path to #4: 1 + 2 + 3
-  //
-  // mean: 10 / 3 = 3.333
-
-  g.get_adjacency_matrix().set(0, 2, 1.0);
-  g.get_adjacency_matrix().set(2, 0, 1.0);
-
-  g.get_adjacency_matrix().set(2, 1, 2.0);
-  g.get_adjacency_matrix().set(1, 2, 2.0);
-
-  g.get_adjacency_matrix().set(1, 3, 3.0);
-  g.get_adjacency_matrix().set(3, 1, 3.0);
-
-  cout << g.get_adjacency_matrix();
-
-  // mean shortest path length: 3 units
-  ShortestPathFinder sp = ShortestPathFinder(g);
-
-  if (sp.get_mean_shortest_path_length() != (10.0 / 3)) {
-    cout << "test 1 failed : " << sp.get_mean_shortest_path_length() << endl;
-  }
-
-  Graph g2 = Graph(4, 0);
-  g2.get_adjacency_matrix().set(0, 1, 1.0);
-  g2.get_adjacency_matrix().set(1, 0, 1.0);
-
-  g2.get_adjacency_matrix().set(2, 1, 3.0);
-  g2.get_adjacency_matrix().set(1, 2, 3.0);
-
-  g2.get_adjacency_matrix().set(2, 3, 3.0);
-  g2.get_adjacency_matrix().set(3, 2, 3.0);
-
-  ShortestPathFinder sp2 = ShortestPathFinder(g2);
-  if (sp2.get_mean_shortest_path_length() != 4) {
-    cout << "test 2 failed : " << sp.get_mean_shortest_path_length() << endl;
-  }
+  return(out);
 }
 
+
+/* Main function.
+   Calculates typical values for 0.2 and 0.4 density random 50x50 matrices with
+   1-10 long edges. */
 int main() {
-  vector<Graph*> graphs = vector<Graph*>();
-  graphs.push_back(new Graph(50, 0.2, 1.0, 10.0, 0));
-  graphs.push_back(new Graph(50, 0.4, 1.0, 10.0, 0));
+  const double densities[] = {0.2, 0.4};
 
-  cout << "graphs have been created" << endl;
+  for(int graph_index = 0; graph_index < 2; ++graph_index) {
+    cout << "Graphs with density " << densities[graph_index] << endl;
+    cout << "---------------------------------------" << endl;
 
-  for(size_t i = 0; i < graphs.size(); ++i) {
-    ShortestPathFinder path_finder = ShortestPathFinder(*(graphs[i]));
-    cout << "average dist:" <<
-            path_finder.get_mean_shortest_path_length() << endl;
+    double sum = 0.0;
+    int count = 0;
+
+    /* By changing the seed different, but reproducible random graphs are
+       generated, over which the mean shortest path is calculated. */
+    for(int seed = 0; seed < 20; ++seed) {
+      Graph graph(50, densities[graph_index], 1.0, 10.0, seed);
+
+      ShortestPathFinder path_finder = ShortestPathFinder(graph);
+      double act_mean_length = path_finder.GetMeanShortestPathLength();
+      cout << "average dist: " << act_mean_length << endl;
+      sum += act_mean_length;
+      ++count;
+    }
+    cout << "---------------------------------------" << endl;
+    cout << "Summary: mean was " << sum / count << endl << endl;
   }
 
   return 0;
