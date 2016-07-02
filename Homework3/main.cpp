@@ -40,6 +40,7 @@
 #include <vector>
 #include <random>
 #include <map>
+#include <fstream>
 
 
 using namespace std;
@@ -64,10 +65,18 @@ class Matrix {
  public:
   /* Creates and a matrix of the given size.
   The values are allocated but undefined. */
-  Matrix(int rows_, int cols_) {
-    this->rows_ = rows_;
-    this->cols_ = cols_;
-    values_ = new double[rows_ * cols_];
+  Matrix(int rows, int cols) {
+    rows_ = rows;
+    cols_ = cols;
+    values_ = new double[rows * cols];
+  }
+
+  Matrix(int rows, int cols, const double initial_weight) : Matrix(rows, cols) {
+    int ncells = rows * cols;
+
+    for(int i = 0; i < ncells; ++i) {
+      values_[i] = initial_weight;
+    }
   }
 
   ~Matrix() {
@@ -108,6 +117,12 @@ class Graph {
      distances. "inf" weights are to be used between the non-adjacent nodes. */
   Matrix* adjacency_;
 
+  /* Sets an edge in the graph enforcing that the graph stays undirected. */
+  inline void Set(int start_node, int target_node, double weight) {
+    adjacency_->Set(start_node, target_node, weight);
+    adjacency_->Set(target_node, start_node, weight);
+  }
+
   /* Initializes a symmetric adjacency matrix with random weights. */
   void RandomInit(double density, double min_dist, double max_dist, int seed) {
 
@@ -121,11 +136,9 @@ class Graph {
         // values equally for both directions
         if (is_connected_dist(generator) < density) {
           double dist = edge_distribution(generator);
-          adjacency_->Set(i, j, dist);
-          adjacency_->Set(j, i, dist);
+          Set(i, j, dist);
         } else {
-          adjacency_->Set(i, j, kInf);
-          adjacency_->Set(j, i, kInf);
+          Set(i, j, kInf);
         }
       }
     }
@@ -140,6 +153,29 @@ class Graph {
     adjacency_ = new Matrix(nodes, nodes);;
     RandomInit(density, min_dist, max_dist, seed);
   }
+
+  /* Creates the graph according to the contents found in the file.
+
+     A simple file structure is mandated:
+
+     - first line: number of nodes
+     - any further line: defines an edge in the form "node1 node2 weight"
+
+     The edges not defined are considered disonnected (i.e. get a weight of Inf).
+  */
+  Graph(string filename) {
+    ifstream filestream(filename);
+    int nodes;
+    filestream >> nodes;
+    adjacency_ = new Matrix(nodes, nodes, kInf);
+
+    while(!filestream.eof()) {
+      int start_node, target_node;
+      double weight;
+      filestream >> start_node >> target_node >> weight;
+      adjacency_->Set(start_node, target_node, weight);
+    }
+  };
 
   /* Destructor - frees up allocated memory. */
   ~Graph() {
@@ -242,6 +278,7 @@ template<class Key, class Priority> class SimplePriorityQueue {
       cout << it->first << ":" << it -> second << endl;
       ++it;
     }
+    return(out);
   }
 };
 
@@ -360,29 +397,31 @@ ostream& operator <<(ostream& out, Graph& g) {
    Calculates typical values for 0.2 and 0.4 density random 50x50 matrices with
    1-10 long edges. */
 int main() {
-  const double densities[] = {0.2, 0.4};
-
-  for(int graph_index = 0; graph_index < 2; ++graph_index) {
-    cout << "Graphs with density " << densities[graph_index] << endl;
-    cout << "---------------------------------------" << endl;
-
-    double sum = 0.0;
-    int count = 0;
-
-    /* By changing the seed different, but reproducible random graphs are
-       generated, over which the mean shortest path is calculated. */
-    for(int seed = 0; seed < 20; ++seed) {
-      Graph graph(50, densities[graph_index], 1.0, 10.0, seed);
-
-      ShortestPathFinder path_finder = ShortestPathFinder(graph);
-      double act_mean_length = path_finder.GetMeanShortestPathLength();
-      cout << "average dist: " << act_mean_length << endl;
-      sum += act_mean_length;
-      ++count;
-    }
-    cout << "---------------------------------------" << endl;
-    cout << "Summary: mean was " << sum / count << endl << endl;
-  }
+//  const double densities[] = {0.2, 0.4};
+//
+//  for(int graph_index = 0; graph_index < 2; ++graph_index) {
+//    cout << "Graphs with density " << densities[graph_index] << endl;
+//    cout << "---------------------------------------" << endl;
+//
+//    double sum = 0.0;
+//    int count = 0;
+//
+//    /* By changing the seed different, but reproducible random graphs are
+//       generated, over which the mean shortest path is calculated. */
+//    for(int seed = 0; seed < 20; ++seed) {
+//      Graph graph(50, densities[graph_index], 1.0, 10.0, seed);
+//
+//      ShortestPathFinder path_finder = ShortestPathFinder(graph);
+//      double act_mean_length = path_finder.GetMeanShortestPathLength();
+//      cout << "average dist: " << act_mean_length << endl;
+//      sum += act_mean_length;
+//      ++count;
+//    }
+//    cout << "---------------------------------------" << endl;
+//    cout << "Summary: mean was " << sum / count << endl << endl;
+//  }
+  Graph gr("/home/janca/c++/C++ for Programmers/Homework3/sample_test_data.txt");
+  cout << gr;
 
   return 0;
 }
