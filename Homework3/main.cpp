@@ -130,22 +130,10 @@ class EdgeSelection {
     }
   }
 
-  /* Allows access to the contained items but prevents inconsistent 
+  /* Allows access to the contained items but prevents inconsistent
      modifications */
   const multimap<int, int>& GetItems() {
     return(*items_);
-  }
-
-  /* TODO: to be removed */
-  const void Exclude(EdgeSelection& edges) {
-    cout << "count before:" << items_->size() << endl;
-    auto items = edges.GetItems();
-    for(auto edge : items) {
-      items_->erase(edge.first, edge.second);
-
-      items_->erase()
-    }
-    cout << "count after:" << items_->size() << endl;
   }
 };
 
@@ -267,31 +255,6 @@ class Graph {
     }
 
     return(neighbours);
-  }
-
-  /* TODO: to be removed */
-  /* Finds the minimum cost edge originating from a given node, considering only
-     the allowed nodes. The i'th node is allowed if allowed_nodes[i] is true,
-     allowed_nodes must contain an item per each node.
-
-     Returns false iff there was no connected and allowed node. */
-  bool GetMinCostEdgeFrom(
-    int from_node, const vector<bool> allowed_nodes,
-    int& min_target, double& min_cost) {
-
-    min_cost = kInf;
-    min_target = -1;
-
-    for(int i = 0; static_cast<size_t>(i) < allowed_nodes.size(); ++i) {
-
-      if (allowed_nodes[i] &&
-          (adjacency_->Get(from_node, i) < min_cost)) {
-        min_cost = adjacency_->Get(from_node, i);
-        min_target = i;
-      }
-    }
-
-    return(min_cost < kInf);
   }
 };
 
@@ -451,21 +414,6 @@ class MinSpanningTreeFinder {
  private:
   Graph* graph_;
 
-  /* Removes unused edges from the graph */
-  void RemoveUnusedEdges(EdgeSelection& edges,
-                         const vector<bool> allowed_nodes) {
-
-    EdgeSelection unused;
-
-    for(auto iter in edges.GetItems()) {
-      if (!allowed_nodes[iter->first] && !allowed_nodes[iter->second]) {
-        unused.emplace(iter->first, iter->second);
-      }
-    }
-
-    edges.Exclude(unused);
-  }
-
   /* Finds the edge with a minimum weight pointing out from the known vertices
      (i.e. to those marked with true in allowed_nodes[]. */
   bool GetMinCostEdgeFrom(
@@ -475,27 +423,18 @@ class MinSpanningTreeFinder {
     min_cost = kInf;
     min_target = -1;
 
-    EdgeSelection unused;
-
     multimap<int, int> items;
     items = edges.GetItems();
 
     for(auto item : items) {
       // the edge should connect an already included node and one that isn't,
       // should also be so far minimal
-      if (allowed_nodes[item.first] == allowed_nodes[item.second]) {
-        if (!allowed_nodes[item.first]) {
-          /* connects two nodes which have both already been included - mark it
-             for removal */
-          unused.emplace(item.first, item.second);
-        }
-      } else if (graph_->GetEdgeLength(item.first, item.second) < min_cost) {
+      if ((allowed_nodes[item.first] != allowed_nodes[item.second]) &&
+          (graph_->GetEdgeLength(item.first, item.second) < min_cost)) {
         min_cost = graph_->GetEdgeLength(item.first, item.second);
         min_target = allowed_nodes[item.first] ? item.first : item.second;
       }
     }
-
-    edges.Exclude(unused);
 
     return(min_cost < kInf);
   }
