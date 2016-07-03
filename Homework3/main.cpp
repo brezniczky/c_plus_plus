@@ -1,14 +1,18 @@
 /*
-  Implementation of Dijsktra's algorithm for shortest path in a graph, with a
-  focus on estimating average path length between nodes.
+  Implementation of Prim's (and Dijsktra's) algorithm.
+
+  The demonstrated method is Prim's, over a graph read in from a file.
 
   Main classes:
 
   Matrix
   Graph
-  ShortestPathFinder
+  (SimplePriorityQueue)
+  (ShortestPathFinder)
+  MinSpanningTreeFinder
 
-  The classes have the "<<" operator defined for verification purposes.
+
+  Most classes have the "<<" operator defined mainly for verification purposes.
 
   Future improvements:
   - define (x, y) operator on the matrix class
@@ -16,24 +20,13 @@
   - the matrix could be triangular, since it is symmetric - memory consumption
     could be reduced
 
-  - create generic mean or sum calculation solution
+  - further handling of exceptions/unsuccessful execution
 
-  - handling of exceptions/unsuccessful execution
-
-  - use priority_queue standard template via inheritance as mentioned at
-    http://stackoverflow.com/questions/19467485/c-priority-queue-removing-element-not-at-top
-    hm... looks like this approach will rebuild the heap on removal, making that
-    an o(n) operation
-
-    here is another approach, which is indeed fast
-    http://stackoverflow.com/questions/3076163/stl-priority-queue-deleting-an-item
-    but may pollute memory (fits well though in my case)
-
-    yet another: use multiset (can't remember where it was suggested)
+  - examine multiset as a PriorityQueue implementation option (can't remember
+    where it was suggested)
     http://en.cppreference.com/w/cpp/container/multiset
     "a sorted set of objects of type Key"
     "Search, insertion, and removal operations have logarithmic complexity."
-
 */
 
 #include <iostream>
@@ -45,6 +38,9 @@
 
 using namespace std;
 
+/* Name of the file to read in the edges of the searched graph from. */
+const string kInputFilename =
+  "/home/janca/c++/C++ for Programmers/Homework3/sample_test_data.txt";
 
 /* Infinite value constant. */
 const double kInf = numeric_limits<double>::infinity();
@@ -105,6 +101,55 @@ class Matrix {
 };
 
 
+/* An edge selection class.
+
+   Stores edges in (node1, node2) form, where node1 < node2.
+
+   The declaration also allows to overload the << operator for this specific
+   class.
+*/
+class EdgeSelection {
+ private:
+   multimap<int, int>* items_;
+ public:
+  EdgeSelection() {
+    items_ = new multimap<int, int>();
+  }
+
+  ~EdgeSelection() {
+    delete(items_);
+  }
+
+  /* Adds a (key, value) to the map, while ensuring key < value to enhance
+     readability. */
+  void emplace(int key, int value) {
+    if (key > value) {
+      items_->emplace(value, key);
+    } else {
+      items_->emplace(key, value);
+    }
+  }
+
+  /* Allows access to the contained items but prevents inconsistent 
+     modifications */
+  const multimap<int, int>& GetItems() {
+    return(*items_);
+  }
+
+  /* TODO: to be removed */
+  const void Exclude(EdgeSelection& edges) {
+    cout << "count before:" << items_->size() << endl;
+    auto items = edges.GetItems();
+    for(auto edge : items) {
+      items_->erase(edge.first, edge.second);
+
+      items_->erase()
+    }
+    cout << "count after:" << items_->size() << endl;
+  }
+};
+
+
 /* A simple graph class allowing directed and undirected weighted graphs to be
    specified, and for random graph generation.
 
@@ -161,8 +206,8 @@ class Graph {
      - first line: number of nodes
      - any further line: defines an edge in the form "node1 node2 weight"
 
-     The edges not defined are considered disonnected (i.e. get a weight of Inf).
-  */
+     The edges not defined are considered disonnected (i.e. get an infinite
+     weight assigned). */
   Graph(string filename) {
     ifstream filestream(filename);
     int nodes;
@@ -198,6 +243,17 @@ class Graph {
     return(adjacency_->Get(node1, node2));
   }
 
+  /* Returns all edges in the graph. */
+  void GetEdges(EdgeSelection& edges) {
+    for(int i = 0; i < adjacency_->GetRows(); i++) {
+      for(int j = 0; j < adjacency_->GetCols(); j++) {
+        if (adjacency_->Get(i, j) < kInf) {
+          edges.emplace(i, j);
+        }
+      }
+    }
+  }
+
   /* Returns all the edges originating from a given node. */
   vector<pair<int, double>> GetEdgesFrom(int node) {
 
@@ -211,6 +267,31 @@ class Graph {
     }
 
     return(neighbours);
+  }
+
+  /* TODO: to be removed */
+  /* Finds the minimum cost edge originating from a given node, considering only
+     the allowed nodes. The i'th node is allowed if allowed_nodes[i] is true,
+     allowed_nodes must contain an item per each node.
+
+     Returns false iff there was no connected and allowed node. */
+  bool GetMinCostEdgeFrom(
+    int from_node, const vector<bool> allowed_nodes,
+    int& min_target, double& min_cost) {
+
+    min_cost = kInf;
+    min_target = -1;
+
+    for(int i = 0; static_cast<size_t>(i) < allowed_nodes.size(); ++i) {
+
+      if (allowed_nodes[i] &&
+          (adjacency_->Get(from_node, i) < min_cost)) {
+        min_cost = adjacency_->Get(from_node, i);
+        min_target = i;
+      }
+    }
+
+    return(min_cost < kInf);
   }
 };
 
@@ -366,6 +447,111 @@ class ShortestPathFinder {
 };
 
 
+class MinSpanningTreeFinder {
+ private:
+  Graph* graph_;
+
+  /* Removes unused edges from the graph */
+  void RemoveUnusedEdges(EdgeSelection& edges,
+                         const vector<bool> allowed_nodes) {
+
+    EdgeSelection unused;
+
+    for(auto iter in edges.GetItems()) {
+      if (!allowed_nodes[iter->first] && !allowed_nodes[iter->second]) {
+        unused.emplace(iter->first, iter->second);
+      }
+    }
+
+    edges.Exclude(unused);
+  }
+
+  /* Finds the edge with a minimum weight pointing out from the known vertices
+     (i.e. to those marked with true in allowed_nodes[]. */
+  bool GetMinCostEdgeFrom(
+    EdgeSelection& edges, const vector<bool> allowed_nodes,
+    int& min_target, double& min_cost) {
+
+    min_cost = kInf;
+    min_target = -1;
+
+    EdgeSelection unused;
+
+    multimap<int, int> items;
+    items = edges.GetItems();
+
+    for(auto item : items) {
+      // the edge should connect an already included node and one that isn't,
+      // should also be so far minimal
+      if (allowed_nodes[item.first] == allowed_nodes[item.second]) {
+        if (!allowed_nodes[item.first]) {
+          /* connects two nodes which have both already been included - mark it
+             for removal */
+          unused.emplace(item.first, item.second);
+        }
+      } else if (graph_->GetEdgeLength(item.first, item.second) < min_cost) {
+        min_cost = graph_->GetEdgeLength(item.first, item.second);
+        min_target = allowed_nodes[item.first] ? item.first : item.second;
+      }
+    }
+
+    edges.Exclude(unused);
+
+    return(min_cost < kInf);
+  }
+
+ public:
+  /* Creates the instance, preparing for operations on the given graph. */
+  MinSpanningTreeFinder(Graph& g) {
+    graph_ = &g;
+  }
+
+  /* Searches the graph for a minimum spanning tree according to Prim's
+     algorithm (https://en.wikipedia.org/wiki/Prim%27s_algorithm).
+
+     Returns true iff the MST was found. */
+  bool RunPrim(EdgeSelection& edges, double& total_cost) {
+    int nodes = graph_->GetNodeCount();
+
+    // boolean matrix: which nodes are yet to reach
+    vector<bool> node_allowed(nodes);
+    for(int i = 1; i < nodes; ++i) {
+      node_allowed[i] = true;
+    }
+
+    // start with an arbitrary node: e.g. the first
+    node_allowed[0] = false;
+    int act_node = 0;
+
+    EdgeSelection all_edges;
+    graph_->GetEdges(all_edges);
+
+    /* build a spanning tree:
+       in each iteration add the closest reachable vertex until all of them are
+       included in the spanning tree */
+    for(int nodes_left = nodes - 1; nodes_left > 0; --nodes_left) {
+      int min_target;
+      double min_cost;
+
+      if (GetMinCostEdgeFrom(all_edges, node_allowed,
+                             min_target, min_cost)) {
+
+        edges.emplace(act_node, min_target);
+        total_cost += min_cost;
+
+        node_allowed[min_target] = false;
+        act_node = min_target;
+      } else {
+        // the graph is disconnected
+        return(false);
+      };
+    }
+
+    return(true);
+  }
+};
+
+
 /* Allows the matrix instances to be printed to output streams in a human
    readable way. */
 ostream& operator<<(ostream& out, Matrix& mat) {
@@ -384,7 +570,6 @@ ostream& operator<<(ostream& out, Matrix& mat) {
   return(out);
 }
 
-
 /* Allows graphs to be printed to output streams in a human readable way. */
 ostream& operator <<(ostream& out, Graph& g) {
   out << g.GetAdjacencyMatrix();
@@ -392,36 +577,37 @@ ostream& operator <<(ostream& out, Graph& g) {
   return(out);
 }
 
+/* Allows edge selections to be printed to output streams in a human readable
+   way. */
+ostream& operator <<(ostream& out, EdgeSelection& edges) {
+  const multimap<int, int>* items = &edges.GetItems();
+  multimap<int, int>::const_iterator iter = items->begin();
+  while (iter != items->end()) {
+    cout << iter->first << "\t" << iter-> second << endl;
+    ++iter;
+  }
+  return(out);
+}
+
 
 /* Main function.
-   Calculates typical values for 0.2 and 0.4 density random 50x50 matrices with
-   1-10 long edges. */
+   Finds the minimum spanning tree for a graph read in from the input file. */
 int main() {
-//  const double densities[] = {0.2, 0.4};
-//
-//  for(int graph_index = 0; graph_index < 2; ++graph_index) {
-//    cout << "Graphs with density " << densities[graph_index] << endl;
-//    cout << "---------------------------------------" << endl;
-//
-//    double sum = 0.0;
-//    int count = 0;
-//
-//    /* By changing the seed different, but reproducible random graphs are
-//       generated, over which the mean shortest path is calculated. */
-//    for(int seed = 0; seed < 20; ++seed) {
-//      Graph graph(50, densities[graph_index], 1.0, 10.0, seed);
-//
-//      ShortestPathFinder path_finder = ShortestPathFinder(graph);
-//      double act_mean_length = path_finder.GetMeanShortestPathLength();
-//      cout << "average dist: " << act_mean_length << endl;
-//      sum += act_mean_length;
-//      ++count;
-//    }
-//    cout << "---------------------------------------" << endl;
-//    cout << "Summary: mean was " << sum / count << endl << endl;
-//  }
-  Graph gr("/home/janca/c++/C++ for Programmers/Homework3/sample_test_data.txt");
-  cout << gr;
+  Graph gr(kInputFilename);
+
+  MinSpanningTreeFinder tree_finder(gr);
+  double total_cost;
+  EdgeSelection min_spanning_tree;
+
+  if (tree_finder.RunPrim(min_spanning_tree, total_cost)) {
+    cout << "Prim's algorithm finished successfully" << endl;
+    cout << "Total cost:" << total_cost << endl;
+    cout << "Edges:" << endl;
+    cout << min_spanning_tree;
+  }
+  else {
+    cout << "Prim's algorithm failed, the graph is disconnected." << endl;
+  }
 
   return 0;
 }
