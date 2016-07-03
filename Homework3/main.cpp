@@ -131,7 +131,7 @@ class EdgeSelection {
   }
 
   /* Allows access to the contained items but prevents inconsistent
-     modifications */
+     modifications. */
   const multimap<int, int>& GetItems() {
     return(*items_);
   }
