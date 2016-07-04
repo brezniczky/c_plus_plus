@@ -21,12 +21,6 @@
     could be reduced
 
   - further handling of exceptions/unsuccessful execution
-
-  - examine multiset as a PriorityQueue implementation option (can't remember
-    where it was suggested)
-    http://en.cppreference.com/w/cpp/container/multiset
-    "a sorted set of objects of type Key"
-    "Search, insertion, and removal operations have logarithmic complexity."
 */
 
 #include <iostream>
@@ -266,40 +260,52 @@ class Graph {
    created then. Suffices for the current input set. */
 template<class Key, class Priority> class SimplePriorityQueue {
  private:
-  map<Key, Priority> priority_by_key_;
+  multimap<Priority, Key> item_by_priority_;
  public:
   /* Adds an item with the given priority. */
-  void Push(const Key& key, const Priority& priority) {
-    priority_by_key_.emplace(key, priority);
+  void Push(const Key item, const Priority priority) {
+    item_by_priority_.emplace(priority, item);
   }
 
-  /* Removes the item with the given key. */
-  bool Erase(const Key key) {
-    return(priority_by_key_.erase(key) > 0);
+  /* Removes the item identified by the given key. */
+  bool Erase(const Key item) {
+    typename multimap<Priority, Key>::iterator it;
+    for(it = item_by_priority_.begin(); it != item_by_priority_.end(); ++it) {
+      if (it->second == item) {
+        item_by_priority_.erase(it);
+        return(true);
+      }
+    }
+    return(false);
+  }
+
+  /* Faster overload of removal, knowing the priority value allows to leverage
+     the priority-based ordering. Useful if priorities tend to be diverse. */
+  bool Erase(const Key item, const Priority priority) {
+    for(auto it = item_by_priority_.find(priority);
+      (it != item_by_priority_.end()) && (it->first==priority);
+      ++it) {
+
+      if (it->second == item) {
+        item_by_priority_.erase(it);
+        return(true);
+      }
+    }
+    return(false);
   }
 
   /* Removes and retrieves the highest priority item
      (i.e. lowest priority value). */
   bool PopMin(Key& key, Priority& priority) {
-    if (priority_by_key_.empty())
+    auto it = item_by_priority_.begin();
+    if (it != item_by_priority_.end()) {
+      priority = it->first;
+      key = it->second;
+      item_by_priority_.erase(it);
+      return(true);
+    } else {
       return(false);
-
-    typename map<Key, Priority>::iterator it = priority_by_key_.begin();
-
-    key = it->first;
-    priority = it->second;
-
-    while(it != priority_by_key_.end()) {
-      if (it->second < priority) {
-        key = it->first;
-        priority = it->second;
-      }
-      ++it;
     }
-
-    Erase(key);
-
-    return(true);
   }
 
   /* Changes the priority associated with the item as specified. */
@@ -308,24 +314,29 @@ template<class Key, class Priority> class SimplePriorityQueue {
     Push(key, new_priority);
   }
 
+  /* Faster overload: changes the priority associated with the item as
+     specified but requires knowledge of the old priority. */
+  void ChangePriority(const Key& key,
+    const Priority& old_priority, const Priority& new_priority) {
+
+    Erase(key, old_priority);
+    Push(key, new_priority);
+  }
+
   /* Tells if the queue is empty. */
   bool Empty() {
-    return(priority_by_key_.empty());
+    return(item_by_priority_.empty());
   }
 
   /* Allows priority queues to be printed to output streams in a human readable
      way. */
   ostream& operator<<(ostream& out) {
-    typename map<Key, Priority>::iterator it = priority_by_key_.begin();
-
-    while(it != priority_by_key_.end()) {
-      cout << it->first << ":" << it -> second << endl;
-      ++it;
+    for(auto it : item_by_priority_) {
+      cout << it.first << ":" << it.second << endl;
     }
     return(out);
   }
 };
-
 
 /* Class implementing Dijsktra's shortest path algorithm, with focusing only on
    the average path lengths from a given node. */
@@ -371,8 +382,8 @@ class ShortestPathFinder {
         double alt_dist = act_dist + edges.at(j).second;
         int v = edges.at(j).first;
         if (alt_dist < dist[v]) {
+          q.ChangePriority(v, dist[v], alt_dist);
           dist[v] = alt_dist;
-          q.ChangePriority(v, alt_dist);
 
           // keep going: this allows to check the paths to all other nodes
         }
@@ -522,7 +533,7 @@ ostream& operator <<(ostream& out, EdgeSelection& edges) {
   const multimap<int, int>* items = &edges.GetItems();
   multimap<int, int>::const_iterator iter = items->begin();
   while (iter != items->end()) {
-    cout << iter->first << "\t" << iter-> second << endl;
+    out << iter->first << "\t" << iter-> second << endl;
     ++iter;
   }
   return(out);
@@ -550,3 +561,34 @@ int main() {
 
   return 0;
 }
+
+///* Main function.
+//   Calculates typical values for 0.2 and 0.4 density random 50x50 matrices with
+//   1-10 long edges. */
+//int main() {
+//  const double densities[] = {0.2, 0.4};
+//
+//  for(int graph_index = 0; graph_index < 2; ++graph_index) {
+//    cout << "Graphs with density " << densities[graph_index] << endl;
+//    cout << "---------------------------------------" << endl;
+//
+//    double sum = 0.0;
+//    int count = 0;
+//
+//    /* By changing the seed different, but reproducible random graphs are
+//       generated, over which the mean shortest path is calculated. */
+//    for(int seed = 0; seed < 20; ++seed) {
+//      Graph graph(50, densities[graph_index], 1.0, 10.0, seed);
+//
+//      ShortestPathFinder path_finder = ShortestPathFinder(graph);
+//      double act_mean_length = path_finder.GetMeanShortestPathLength();
+//      cout << "average dist: " << act_mean_length << endl;
+//      sum += act_mean_length;
+//      ++count;
+//    }
+//    cout << "---------------------------------------" << endl;
+//    cout << "Summary: mean was " << sum / count << endl << endl;
+//  }
+//
+//  return 0;
+//}
