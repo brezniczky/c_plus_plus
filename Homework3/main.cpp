@@ -95,7 +95,7 @@ class Matrix {
 };
 
 
-/* An edge selection class.
+/* An edge selection class for symmetric edges.
 
    Stores edges in (node1, node2) form, where node1 < node2.
 
@@ -114,13 +114,13 @@ class EdgeSelection {
     delete(items_);
   }
 
-  /* Adds a (key, value) to the map, while ensuring key < value to enhance
+  /* Adds a (node1, node2) to the map, while ensuring node1 < node2 to enhance
      readability. */
-  void emplace(int key, int value) {
-    if (key > value) {
-      items_->emplace(value, key);
+  void emplace(int node1, int node2) {
+    if (node1 > node2) {
+      items_->emplace(node2, node1);
     } else {
-      items_->emplace(key, value);
+      items_->emplace(node1, node2);
     }
   }
 
@@ -209,6 +209,8 @@ class Graph {
     delete adjacency_;
   }
 
+  const int kInvalidNode = -1;
+
   /* Tells the number of nodes in the graph. */
   int GetNodeCount() {
     return(adjacency_->GetRows());
@@ -226,17 +228,17 @@ class Graph {
   }
 
   /* Returns all edges in the graph. */
-  void GetEdges(EdgeSelection& edges) {
+  void GetEdges(vector<pair<int, int>>& edges) {
     for(int i = 0; i < adjacency_->GetRows(); i++) {
       for(int j = 0; j < adjacency_->GetCols(); j++) {
         if (adjacency_->Get(i, j) < kInf) {
-          edges.emplace(i, j);
+          edges.push_back(pair<int, int>(i, j));
         }
       }
     }
   }
 
-  /* Returns all the edges originating from a given node. */
+  /* Returns all the edges originating from a given node and their weights. */
   vector<pair<int, double>> GetEdgesFrom(int node) {
 
     vector<pair<int, double>> neighbours = vector<pair<int, double>>();
@@ -456,45 +458,56 @@ class MinSpanningTreeFinder {
     graph_ = &g;
   }
 
-  /* Searches the graph for a minimum spanning tree according to Prim's
-     algorithm (https://en.wikipedia.org/wiki/Prim%27s_algorithm).
-
-     Returns true iff the MST was found. */
   bool RunPrim(EdgeSelection& edges, double& total_cost) {
+    // edges ~ F
     int nodes = graph_->GetNodeCount();
 
-    // boolean matrix: which nodes are yet to reach
-    vector<bool> node_allowed(nodes);
-    for(int i = 1; i < nodes; ++i) {
-      node_allowed[i] = true;
+    // initialize - statically sized variables do not need to be vectors
+    double min_costs[nodes];   // ~ C
+    int min_prev_nodes[nodes]; // ~ E, only store the previous node idx.
+    bool is_free_vertex[nodes];
+    SimplePriorityQueue<int, double> free_vertices; // ~ Q
+
+    for(int i = 0; i < nodes; ++i) {
+      free_vertices.Push(i, kInf);
+      min_costs[i] = kInf;
+      min_prev_nodes[i] = graph_->kInvalidNode;
+      is_free_vertex[i] = true; // speeds up checking if a node is enqueued
     }
+    total_cost = 0;
 
-    // start with an arbitrary node: e.g. the first
-    node_allowed[0] = false;
-    int act_node = 0;
-
-    EdgeSelection all_edges;
-    graph_->GetEdges(all_edges);
-
-    /* build a spanning tree:
-       in each iteration add the closest reachable vertex until all of them are
-       included in the spanning tree */
-    for(int nodes_left = nodes - 1; nodes_left > 0; --nodes_left) {
-      int min_target;
-      double min_cost;
-
-      if (GetMinCostEdgeFrom(all_edges, node_allowed,
-                             min_target, min_cost)) {
-
-        edges.emplace(act_node, min_target);
-        total_cost += min_cost;
-
-        node_allowed[min_target] = false;
-        act_node = min_target;
+    int new_node;
+    double min_length;
+    bool is_first = true;
+    // look for the closest nodes to be added
+    while(free_vertices.PopMin(new_node, min_length)) {
+      if (min_costs[new_node] < kInf) {
+        // add the edge pointing to easiest to reach node
+        int new_prev_node = min_prev_nodes[new_node];
+        edges.emplace(new_prev_node, new_node);
+        total_cost += min_costs[new_node];
+      } else if (is_first) {
+        is_first = false;
       } else {
-        // the graph is disconnected
+        // an infinitely long hop (unless for the first node) means a
+        // disconnected graph
         return(false);
-      };
+      }
+
+      is_free_vertex[new_node] = false;
+
+      // from the new node, further nodes may become available
+      vector<pair<int, double>> new_edges = graph_->GetEdgesFrom(new_node);
+      for(size_t i = 0; i < new_edges.size(); ++i) {
+        int target = new_edges[i].first;
+        int target_cost = new_edges[i].second;
+
+        if (is_free_vertex[target] && (target_cost < min_costs[target])) {
+          free_vertices.ChangePriority(target, min_costs[target], target_cost);
+          min_prev_nodes[target] = new_node;
+          min_costs[target] = target_cost;
+        }
+      }
     }
 
     return(true);
@@ -562,33 +575,3 @@ int main() {
   return 0;
 }
 
-///* Main function.
-//   Calculates typical values for 0.2 and 0.4 density random 50x50 matrices with
-//   1-10 long edges. */
-//int main() {
-//  const double densities[] = {0.2, 0.4};
-//
-//  for(int graph_index = 0; graph_index < 2; ++graph_index) {
-//    cout << "Graphs with density " << densities[graph_index] << endl;
-//    cout << "---------------------------------------" << endl;
-//
-//    double sum = 0.0;
-//    int count = 0;
-//
-//    /* By changing the seed different, but reproducible random graphs are
-//       generated, over which the mean shortest path is calculated. */
-//    for(int seed = 0; seed < 20; ++seed) {
-//      Graph graph(50, densities[graph_index], 1.0, 10.0, seed);
-//
-//      ShortestPathFinder path_finder = ShortestPathFinder(graph);
-//      double act_mean_length = path_finder.GetMeanShortestPathLength();
-//      cout << "average dist: " << act_mean_length << endl;
-//      sum += act_mean_length;
-//      ++count;
-//    }
-//    cout << "---------------------------------------" << endl;
-//    cout << "Summary: mean was " << sum / count << endl << endl;
-//  }
-//
-//  return 0;
-//}
