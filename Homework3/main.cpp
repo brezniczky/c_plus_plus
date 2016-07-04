@@ -422,10 +422,15 @@ class ShortestPathFinder {
   }
 };
 
-
+/* Class to find minimum spanning trees (MSTs) in a given graph. */
 class MinSpanningTreeFinder {
  private:
   Graph* graph_;
+
+  double* min_costs;   // ~ C
+  int* min_prev_nodes; // ~ E, only store the previous node index
+  SimplePriorityQueue<int, double>* free_vertices; // ~ Q
+  bool* is_free_vertex; // speeds up checking if a node is enqueued
 
   /* Finds the edge with a minimum weight pointing out from the known vertices
      (i.e. to those marked with true in allowed_nodes[]. */
@@ -452,41 +457,82 @@ class MinSpanningTreeFinder {
     return(min_cost < kInf);
   }
 
+  /* Initializes member variables for the search. */
+  void InitializeSearch(double& total_cost) {
+    int nodes = graph_->GetNodeCount();
+    for(int i = 0; i < nodes; ++i) {
+      min_costs[i] = kInf;
+      min_prev_nodes[i] = graph_->kInvalidNode; // just in case - never checked
+      free_vertices->Push(i, kInf);
+      is_free_vertex[i] = true;
+    }
+    total_cost = 0;
+  }
+
+  /* Performs necessary updates to members when a new node joins the tree. */
+  void UpdateOnNewNode(int new_node) {
+    is_free_vertex[new_node] = false;
+
+    // from the new node, further nodes may become available
+    vector<pair<int, double>> new_edges = graph_->GetEdgesFrom(new_node);
+    for(size_t i = 0; i < new_edges.size(); ++i) {
+      int target = new_edges[i].first;
+      int target_cost = new_edges[i].second;
+
+      if (is_free_vertex[target] && (target_cost < min_costs[target])) {
+        free_vertices->ChangePriority(target, min_costs[target], target_cost);
+        min_prev_nodes[target] = new_node;
+        min_costs[target] = target_cost;
+      }
+    }
+  }
+
  public:
   /* Creates the instance, preparing for operations on the given graph. */
   MinSpanningTreeFinder(Graph& g) {
     graph_ = &g;
-  }
 
-  bool RunPrim(EdgeSelection& edges, double& total_cost) {
-    // edges ~ F
+    // RAII
     int nodes = graph_->GetNodeCount();
 
-    // initialize - statically sized variables do not need to be vectors
-    double min_costs[nodes];   // ~ C
-    int min_prev_nodes[nodes]; // ~ E, only store the previous node idx.
-    bool is_free_vertex[nodes];
-    SimplePriorityQueue<int, double> free_vertices; // ~ Q
+    min_costs = new double[nodes];
+    min_prev_nodes = new int[nodes];
+    is_free_vertex = new bool[nodes];
+    free_vertices = new SimplePriorityQueue<int, double>(); // ~ Q
+  }
 
-    for(int i = 0; i < nodes; ++i) {
-      free_vertices.Push(i, kInf);
-      min_costs[i] = kInf;
-      min_prev_nodes[i] = graph_->kInvalidNode;
-      is_free_vertex[i] = true; // speeds up checking if a node is enqueued
-    }
-    total_cost = 0;
+  /* Destructor: extends default behaviour to free up dynamically allocated
+     resources. */
+  ~MinSpanningTreeFinder() {
+    delete(min_costs);
+    delete(min_prev_nodes);
+    delete(is_free_vertex);
+    delete(free_vertices);
+  }
+
+  /* Searches for an MST in the graph. Implements Prim's algorithm
+     (see https://en.wikipedia.org/wiki/Prim%27s_algorithm). */
+  bool PerformSearch(EdgeSelection& edges, double& total_cost) {
+    // edges ~ F
+
+    // initialize
+    InitializeSearch(total_cost);
 
     int new_node;
     double min_length;
     bool is_first = true;
-    // look for the closest nodes to be added
-    while(free_vertices.PopMin(new_node, min_length)) {
+
+    // look for the closest nodes to be added: try to find one
+    while(free_vertices->PopMin(new_node, min_length)) {
+
       if (min_costs[new_node] < kInf) {
-        // add the edge pointing to easiest to reach node
+        // take note of the edge pointing to easiest to reach node
         int new_prev_node = min_prev_nodes[new_node];
         edges.emplace(new_prev_node, new_node);
         total_cost += min_costs[new_node];
       } else if (is_first) {
+        // for the first node it is okay - every node is disconnected from an
+        // empty tree
         is_first = false;
       } else {
         // an infinitely long hop (unless for the first node) means a
@@ -494,20 +540,7 @@ class MinSpanningTreeFinder {
         return(false);
       }
 
-      is_free_vertex[new_node] = false;
-
-      // from the new node, further nodes may become available
-      vector<pair<int, double>> new_edges = graph_->GetEdgesFrom(new_node);
-      for(size_t i = 0; i < new_edges.size(); ++i) {
-        int target = new_edges[i].first;
-        int target_cost = new_edges[i].second;
-
-        if (is_free_vertex[target] && (target_cost < min_costs[target])) {
-          free_vertices.ChangePriority(target, min_costs[target], target_cost);
-          min_prev_nodes[target] = new_node;
-          min_costs[target] = target_cost;
-        }
-      }
+      UpdateOnNewNode(new_node);
     }
 
     return(true);
@@ -562,7 +595,7 @@ int main() {
   double total_cost;
   EdgeSelection min_spanning_tree;
 
-  if (tree_finder.RunPrim(min_spanning_tree, total_cost)) {
+  if (tree_finder.PerformSearch(min_spanning_tree, total_cost)) {
     cout << "Prim's algorithm finished successfully" << endl;
     cout << "Total cost:" << total_cost << endl;
     cout << "Edges:" << endl;
@@ -574,4 +607,3 @@ int main() {
 
   return 0;
 }
-
