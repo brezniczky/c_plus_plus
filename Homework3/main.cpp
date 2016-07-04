@@ -21,6 +21,9 @@
     could be reduced
 
   - further handling of exceptions/unsuccessful execution
+
+  - better encapsulate the boolean array and the queue or replace the queue
+    class with a proper minheap solution
 */
 
 #include <iostream>
@@ -589,6 +592,9 @@ ostream& operator <<(ostream& out, EdgeSelection& edges) {
 /* Main function.
    Finds the minimum spanning tree for a graph read in from the input file. */
 int main() {
+
+  // please modify kInputFilename according to your location of the file as
+  // needed
   Graph gr(kInputFilename);
 
   MinSpanningTreeFinder tree_finder(gr);
