@@ -435,31 +435,6 @@ class MinSpanningTreeFinder {
   SimplePriorityQueue<int, double>* free_vertices; // ~ Q
   bool* is_free_vertex; // speeds up checking if a node is enqueued
 
-  /* Finds the edge with a minimum weight pointing out from the known vertices
-     (i.e. to those marked with true in allowed_nodes[]. */
-  bool GetMinCostEdgeFrom(
-    EdgeSelection& edges, const vector<bool> allowed_nodes,
-    int& min_target, double& min_cost) {
-
-    min_cost = kInf;
-    min_target = -1;
-
-    multimap<int, int> items;
-    items = edges.GetItems();
-
-    for(auto item : items) {
-      // the edge should connect an already included node and one that isn't,
-      // should also be so far minimal
-      if ((allowed_nodes[item.first] != allowed_nodes[item.second]) &&
-          (graph_->GetEdgeLength(item.first, item.second) < min_cost)) {
-        min_cost = graph_->GetEdgeLength(item.first, item.second);
-        min_target = allowed_nodes[item.first] ? item.first : item.second;
-      }
-    }
-
-    return(min_cost < kInf);
-  }
-
   /* Initializes member variables for the search. */
   void InitializeSearch(double& total_cost) {
     int nodes = graph_->GetNodeCount();
@@ -603,7 +578,7 @@ int main() {
 
   if (tree_finder.PerformSearch(min_spanning_tree, total_cost)) {
     cout << "Prim's algorithm finished successfully" << endl;
-    cout << "Total cost:" << total_cost << endl;
+    cout << "Total cost: " << total_cost << endl;
     cout << "Edges:" << endl;
     cout << min_spanning_tree;
   }
