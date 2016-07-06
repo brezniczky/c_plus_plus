@@ -31,6 +31,5 @@ of two nodes being connected).
 
 This is the previous thing slightly extended to also implement a minimum
 spanning tree algorithm, namely Prim's, and runs that with one certain input
-(at hard-coded path at the time writing, so if it doesn't run, worth a check).
-
-
+(which is expected to be at a hard-coded path at the time writing, so if it 
+doesn't work, it is probably the path needing an update).
