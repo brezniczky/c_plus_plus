@@ -73,7 +73,7 @@ class Matrix {
   }
 
   ~Matrix() {
-    delete(values_);
+    delete[](values_);
   }
 
   /* Gets the value of a given cell. */
@@ -107,30 +107,22 @@ class Matrix {
 */
 class EdgeSelection {
  private:
-   multimap<int, int>* items_;
+   multimap<int, int> items_;
  public:
-  EdgeSelection() {
-    items_ = new multimap<int, int>();
-  }
-
-  ~EdgeSelection() {
-    delete(items_);
-  }
-
   /* Adds a (node1, node2) to the map, while ensuring node1 < node2 to enhance
      readability. */
   void emplace(int node1, int node2) {
     if (node1 > node2) {
-      items_->emplace(node2, node1);
+      items_.emplace(node2, node1);
     } else {
-      items_->emplace(node1, node2);
+      items_.emplace(node1, node2);
     }
   }
 
   /* Allows access to the contained items but prevents inconsistent
      modifications. */
   const multimap<int, int>& GetItems() {
-    return(*items_);
+    return(items_);
   }
 };
 
@@ -432,7 +424,7 @@ class MinSpanningTreeFinder {
 
   double* min_costs;   // ~ C
   int* min_prev_nodes; // ~ E, only store the previous node index
-  SimplePriorityQueue<int, double>* free_vertices; // ~ Q
+  SimplePriorityQueue<int, double> free_vertices; // ~ Q
   bool* is_free_vertex; // speeds up checking if a node is enqueued
 
   /* Initializes member variables for the search. */
@@ -441,7 +433,7 @@ class MinSpanningTreeFinder {
     for(int i = 0; i < nodes; ++i) {
       min_costs[i] = kInf;
       min_prev_nodes[i] = graph_->kInvalidNode; // just in case - never checked
-      free_vertices->Push(i, kInf);
+      free_vertices.Push(i, kInf);
       is_free_vertex[i] = true;
     }
     total_cost = 0;
@@ -458,7 +450,7 @@ class MinSpanningTreeFinder {
       int target_cost = new_edges[i].second;
 
       if (is_free_vertex[target] && (target_cost < min_costs[target])) {
-        free_vertices->ChangePriority(target, min_costs[target], target_cost);
+        free_vertices.ChangePriority(target, min_costs[target], target_cost);
         min_prev_nodes[target] = new_node;
         min_costs[target] = target_cost;
       }
@@ -476,16 +468,14 @@ class MinSpanningTreeFinder {
     min_costs = new double[nodes];
     min_prev_nodes = new int[nodes];
     is_free_vertex = new bool[nodes];
-    free_vertices = new SimplePriorityQueue<int, double>(); // ~ Q
   }
 
   /* Destructor: extends default behaviour to free up dynamically allocated
      resources. */
   ~MinSpanningTreeFinder() {
-    delete(min_costs);
-    delete(min_prev_nodes);
-    delete(is_free_vertex);
-    delete(free_vertices);
+    delete[](min_costs);
+    delete[](min_prev_nodes);
+    delete[](is_free_vertex);
   }
 
   /* Searches for an MST in the graph. Implements Prim's algorithm
@@ -501,7 +491,7 @@ class MinSpanningTreeFinder {
     bool is_first = true;
 
     // look for the closest nodes to be added: try to find one
-    while(free_vertices->PopMin(new_node, min_length)) {
+    while(free_vertices.PopMin(new_node, min_length)) {
 
       if (min_costs[new_node] < kInf) {
         // take note of the edge pointing to easiest to reach node
