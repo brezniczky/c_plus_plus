@@ -57,13 +57,15 @@ class Matrix {
 
  public:
   /* Creates and a matrix of the given size.
-  The values are allocated but undefined. */
+     The values are allocated but undefined. */
   Matrix(int rows, int cols) {
     rows_ = rows;
     cols_ = cols;
     values_ = new double[rows * cols];
   }
 
+  /* Creates and a matrix of the given size.
+     The values are allocated and initialized as specified. */
   Matrix(int rows, int cols, const double initial_weight) : Matrix(rows, cols) {
     int ncells = rows * cols;
 
@@ -72,6 +74,7 @@ class Matrix {
     }
   }
 
+  /* Destructor: frees up dynamically allocated memory. */
   ~Matrix() {
     delete[](values_);
   }
@@ -153,6 +156,7 @@ class Graph {
     uniform_real_distribution<double> is_connected_dist(0.0, 1.0);
 
     for(int i = 0; i < adjacency_->GetRows(); ++i) {
+      Set(i, i, 0);
       for(int j = i + 1; j < adjacency_->GetCols(); ++j) {
         // the adjacency matrix of an undirected graph is symmetric, set the
         // values equally for both directions
@@ -172,7 +176,7 @@ class Graph {
   Graph(int nodes = 50, double density = 0.1,
         double min_dist = 1.0, double max_dist = 10.0, int seed = 0) {
 
-    adjacency_ = new Matrix(nodes, nodes);;
+    adjacency_ = new Matrix(nodes, nodes, 0.0);
     RandomInit(density, min_dist, max_dist, seed);
   }
 
@@ -199,7 +203,7 @@ class Graph {
     }
   };
 
-  /* Destructor - frees up allocated memory. */
+  /* Destructor: frees up dynamically allocated memory. */
   ~Graph() {
     delete adjacency_;
   }
@@ -471,7 +475,7 @@ class MinSpanningTreeFinder {
   }
 
   /* Destructor: extends default behaviour to free up dynamically allocated
-     resources. */
+     memory. */
   ~MinSpanningTreeFinder() {
     delete[](min_costs);
     delete[](min_prev_nodes);
