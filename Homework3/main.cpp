@@ -358,10 +358,11 @@ class ShortestPathFinder {
     SimplePriorityQueue<int, double> q = SimplePriorityQueue<int, double>();
 
     for(int i = 0; i < node_count; ++i) {
-      if (i != from_node)
+      if (i != from_node) {
         dist.push_back(kInf);
-      else
+      } else {
         dist.push_back(0);
+      }
       q.Push(i, dist[i]);
     }
 
@@ -410,8 +411,7 @@ class ShortestPathFinder {
 
     if (count > 0) {
       return(sum / count);
-    }
-    else {
+    } else {
       return(-1);
     }
   }
@@ -524,8 +524,7 @@ ostream& operator<<(ostream& out, Matrix& mat) {
       out << mat.Get(i, j);
       if (j < (mat.GetCols() - 1)) {
         out << ", ";
-      }
-      else {
+      } else {
         out << endl;
       }
     }
@@ -571,8 +570,7 @@ int main() {
     cout << "Total cost: " << total_cost << endl;
     cout << "Edges:" << endl;
     cout << min_spanning_tree;
-  }
-  else {
+  } else {
     cout << "Prim's algorithm failed, the graph is disconnected." << endl;
   }
 
