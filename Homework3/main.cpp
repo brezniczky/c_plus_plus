@@ -35,9 +35,18 @@
 
 using namespace std;
 
+enum ErrorCodes {
+  kOk = 0,
+  kErrorIncorrectArguments = 1,
+  kFileAccessError = 2,
+  kGraphSearchError = 3,
+};
+
 /* Name of the file to read in the edges of the searched graph from. */
-const string kInputFilename =
-  "/home/janca/c++/C++ for Programmers/Homework3/sample_test_data.txt";
+const string kDefaultInputFilename = "sample_test_data.txt";
+
+/* Name of the application. */
+const string kProgramBinaryName = "Homework3";
 
 /* Infinite value constant. */
 const double kInf = numeric_limits<double>::infinity();
@@ -188,9 +197,15 @@ class Graph {
      - any further line: defines an edge in the form "node1 node2 weight"
 
      The edges not defined are considered disonnected (i.e. get an infinite
-     weight assigned). */
+     weight assigned).
+
+     File access errors are communicated via the standard exceptions. */
   Graph(string filename) {
-    ifstream filestream(filename);
+    ifstream filestream;
+
+    // with failbit the reader fails on a last empty line so only use badbit
+    filestream.exceptions (ifstream::badbit);
+    filestream.open(filename);
     int nodes;
     filestream >> nodes;
     adjacency_ = new Matrix(nodes, nodes, kInf);
@@ -201,6 +216,7 @@ class Graph {
       filestream >> start_node >> target_node >> weight;
       adjacency_->Set(start_node, target_node, weight);
     }
+    filestream.close();
   };
 
   /* Destructor: frees up dynamically allocated memory. */
@@ -557,26 +573,110 @@ ostream& operator <<(ostream& out, EdgeSelection& edges) {
 }
 
 
-/* Main function.
-   Finds the minimum spanning tree for a graph read in from the input file. */
-int main() {
-
-  // please modify kInputFilename according to your location of the file as
-  // needed
-  Graph gr(kInputFilename);
-
-  MinSpanningTreeFinder tree_finder(gr);
-  double total_cost;
-  EdgeSelection min_spanning_tree;
-
-  if (tree_finder.PerformSearch(min_spanning_tree, total_cost)) {
-    cout << "Prim's algorithm finished successfully" << endl;
-    cout << "Total cost: " << total_cost << endl;
-    cout << "Edges:" << endl;
-    cout << min_spanning_tree;
-  } else {
-    cout << "Prim's algorithm failed, the graph is disconnected." << endl;
+/* Class to communicate output other than objects to the console. */
+class ProgramOutput {
+ public:
+  void PrintArgumentsProblem(int argc, char* argv[]) {
+    cout << "Incorrect arguments: " << endl << endl;
+    for(int i = 1; i < argc; ++i) {
+      if (i > 1) cout << " ";
+      cout << argv[i];
+    }
+    cout << endl;
+    cout << endl;
+    cout << "Correct usage: ./" << kProgramBinaryName << " [filename]" << endl;
+    cout << "When filename is omitted, the default of" << endl;
+    cout << "\"" << kDefaultInputFilename << "\" is assumed."<< endl;
   }
 
-  return 0;
+  /* Prints MST results. Could be a method of an MST result class, not deemded
+     relevant here ('good enough'). */
+  void PrintMSTResult(bool result, EdgeSelection& min_spanning_tree,
+                      const double total_cost) {
+
+    if (result) {
+      cout << "Prim's algorithm finished successfully." << endl;
+      cout << endl;
+      cout << "Total cost: " << total_cost << endl;
+      cout << "Edges:" << endl;
+      cout << min_spanning_tree;
+    } else {
+      cout << "Prim's algorithm failed, the graph is disconnected." << endl;
+    }
+  }
+
+  /* Prints error message for file access problems. */
+  void FileAccessError(const string filename) {
+    cout << "Failed to open/close the file \"" << filename
+      << "\", please check the file exists and is accessible." << endl;
+  }
+
+  /* Communicates an error during the graph search. */
+  void GraphSearchError() {
+    cout << "An error occurred while searching the graph." << endl;
+  }
+};
+
+
+/* Parses command line arguments and determines the effective input file path.
+   Returns true if succeeds, false means incorrect arguments. */
+class ProgramArguments {
+ private:
+  string filename_;
+ public:
+  bool Parse(int argc, char* argv[], ProgramOutput& output) {
+    if (argc > 2) {
+      output.PrintArgumentsProblem(argc, argv);
+      return(false);
+    };
+
+    if (argc == 1) {
+      filename_ = kDefaultInputFilename;
+    } else {
+      filename_ = argv[1];
+    }
+    return(true);
+  }
+
+  /* Returns the appropriate input filename. */
+  const string& get_filename() {
+    return(filename_);
+  }
+};
+
+
+/* Main function.
+   Finds the minimum spanning tree for a graph read in from the input file. */
+int main(int argc, char* argv[]) {
+  ProgramOutput output;
+
+  ProgramArguments arguments;
+  if (!arguments.Parse(argc, argv, output)) {
+    return(ErrorCodes::kErrorIncorrectArguments);
+  }
+
+  bool is_open = false;
+  try {
+    Graph gr(arguments.get_filename());
+    is_open = true;
+
+    MinSpanningTreeFinder tree_finder(gr);
+    double total_cost;
+    EdgeSelection min_spanning_tree;
+    bool success = tree_finder.PerformSearch(min_spanning_tree, total_cost);
+
+    output.PrintMSTResult(success, min_spanning_tree, total_cost);
+    return(ErrorCodes::kOk);
+  } catch (exception e) {
+
+    if (!is_open) {
+
+      output.FileAccessError(arguments.get_filename());
+      return(ErrorCodes::kFileAccessError);
+    } else {
+
+      output.GraphSearchError();
+      return(ErrorCodes::kGraphSearchError);
+    }
+  };
 }
