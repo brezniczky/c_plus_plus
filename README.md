@@ -3,13 +3,15 @@
 ## Intro
 
 This is some coursework (happens to be mine: Janos Brezniczky), please do not 
-plagiarise, but feel free to check it out otherwise.
+plagiarise, but otherwise if you are a classmate, feel free to check it out.
 
 Before, but also after reviewing others' solutions, I had some thoughts -- so
 the hope is maybe, if you are a fellow coursetaker, it can give you some ideas 
 as well, or reassure you about concepts you didn't have time to try out.
 
-## About the solution
+## About the solutions
+
+### Homework2
 
 This is a Monte-Carlo style estimation of the average shortest path length in
 graphs of certain properties.
@@ -24,3 +26,10 @@ The method:
 
 This is performed with graphs of 0.2 density, then of 0.4 (density: probability 
 of two nodes being connected).
+
+### Homework3
+
+This is the previous thing slightly extended to also implement a minimum
+spanning tree algorithm, namely Prim's, and runs that with one certain input
+(which is expected to be at a hard-coded path at the time writing, so if it 
+doesn't work, it is probably the path needing an update).
